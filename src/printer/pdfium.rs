@@ -71,7 +71,6 @@ impl PdfiumPrinter {
     pub fn new(printer: PrinterDevice) -> Self {
         Self { printer }
     }
-}
 
     /// Print one PDF as one job, reporting each page after the spooler accepts it.
     ///
@@ -227,6 +226,7 @@ impl PdfiumPrinter {
         }
         Ok(())
     }
+}
 
 const PRINT_DRIVER: PCWSTR = PCWSTR(
     [
