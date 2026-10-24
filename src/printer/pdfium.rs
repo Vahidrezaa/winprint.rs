@@ -73,22 +73,15 @@ impl PdfiumPrinter {
     }
 }
 
-const PRINT_DRIVER: PCWSTR = PCWSTR(
-    [
-        'W' as u16, 'I' as u16, 'N' as u16, 'S' as u16, 'P' as u16, 'O' as u16, 'O' as u16,
-        'L' as u16, 0,
-    ]
-    .as_ptr(),
-);
-
-impl FilePrinter for PdfiumPrinter {
-    type Options = PrintTicket;
-    type Error = PdfiumPrinterError;
-
-    fn print(
+    /// Print one PDF as one job, reporting each page after the spooler accepts it.
+    ///
+    /// Counts describe pages processed, not physical output or terminal spooler success.
+    /// The callback runs synchronously on the calling thread; it does not require `Send`.
+    pub fn print_with_progress(
         &self,
         path: &Path,
         options: PrintTicket,
+        mut progress: impl FnMut(u32, u32),
     ) -> std::result::Result<(), PdfiumPrinterError> {
         unsafe {
             let dev_mode = options
@@ -158,6 +151,7 @@ impl FilePrinter for PdfiumPrinter {
             let get_attr =
                 |kind: GET_DEVICE_CAPS_INDEX| -> i32 { GetDeviceCaps(Some(hdc_print), kind) };
             let page_count = FPDF_GetPageCount(document);
+            progress(0, page_count as u32);
             for page_index in 0..page_count {
                 let page = FPDF_LoadPage(document, page_index);
                 defer! {
@@ -222,6 +216,7 @@ impl FilePrinter for PdfiumPrinter {
                 if end_page_ret <= 0 {
                     return Err(PdfiumPrinterError::EndPageFailed(page_index, end_page_ret));
                 }
+                progress(page_index as u32 + 1, page_count as u32);
             }
 
             let end_doc_ret = EndDoc(hdc_print);
@@ -231,6 +226,26 @@ impl FilePrinter for PdfiumPrinter {
             document_completed.set(true);
         }
         Ok(())
+    }
+
+const PRINT_DRIVER: PCWSTR = PCWSTR(
+    [
+        'W' as u16, 'I' as u16, 'N' as u16, 'S' as u16, 'P' as u16, 'O' as u16, 'O' as u16,
+        'L' as u16, 0,
+    ]
+    .as_ptr(),
+);
+
+impl FilePrinter for PdfiumPrinter {
+    type Options = PrintTicket;
+    type Error = PdfiumPrinterError;
+
+    fn print(
+        &self,
+        path: &Path,
+        options: PrintTicket,
+    ) -> std::result::Result<(), PdfiumPrinterError> {
+        self.print_with_progress(path, options, |_, _| {})
     }
 }
 
